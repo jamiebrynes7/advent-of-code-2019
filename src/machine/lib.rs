@@ -181,3 +181,15 @@ impl Output for i64 {
         *self = val;
     }
 }
+
+impl Output for Sender<i64> {
+    fn write(&mut self, val: i64) {
+        self.send(val);
+    }
+}
+
+impl Input for Receiver<i64> {
+    fn get(&mut self) -> i64 {
+        self.recv().unwrap()
+    }
+}
