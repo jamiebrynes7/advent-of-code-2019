@@ -21,7 +21,7 @@ fn main() -> Result<()> {
 fn part_1(mut machine: Machine) {
     machine.set_force(1, 12);
     machine.set_force(2, 2);
-    machine.execute(&InputSource{}, &mut OutputSink{});
+    machine.execute(&mut 0, &mut 0);
     println!("{}", machine.read(0));
 }
 
@@ -33,7 +33,7 @@ fn part_2(mut machine: Machine) {
             let mut machine = machine.clone();
             machine.set_force(1, noun);
             machine.set_force(2, verb);
-            machine.execute(&InputSource{}, &mut OutputSink{});
+            machine.execute(&mut 0, &mut 0);
             if machine.read(0) == TARGET {
                 println!("{}", 100 * noun + verb);
                 return;
@@ -42,18 +42,4 @@ fn part_2(mut machine: Machine) {
     }
 
     println!("Could not find combination")
-}
-
-struct InputSource {}
-
-impl Input for InputSource {
-    fn get(&self) -> i64 {
-        0
-    }
-}
-
-struct OutputSink {}
-
-impl Output for OutputSink {
-    fn write(&mut self, val: i64) {}
 }

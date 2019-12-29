@@ -19,7 +19,7 @@ fn main() -> Result<()> {
 
 fn part_1(mut machine: Machine) {
     let mut output = OutputSource::default();
-    machine.execute(&InputSource{ id: 1 }, &mut output);
+    machine.execute(&mut 1, &mut output);
 
     if !output.was_success() {
         println!("Tests failed!");
@@ -31,17 +31,9 @@ fn part_1(mut machine: Machine) {
 
 fn part_2(mut machine: Machine) {
     let mut output = OutputSource::default();
-    machine.execute(&InputSource { id: 5}, &mut output);
+    machine.execute(&mut 5, &mut output);
 
     println!("Code: {}", output.code())
-}
-
-struct InputSource { pub id: i64 }
-
-impl Input for InputSource {
-    fn get(&self) -> i64 {
-        self.id
-    }
 }
 
 #[derive(Default)]

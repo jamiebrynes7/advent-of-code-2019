@@ -1,5 +1,8 @@
 use std::str::FromStr;
 use std::error::Error;
+use std::sync::mpsc::{Sender, Receiver};
+use std::fs::File;
+use std::io::Write;
 
 type Data = i64;
 
@@ -10,7 +13,7 @@ pub struct Machine {
 }
 
 pub trait Input {
-    fn get(&self) -> Data;
+    fn get(&mut self) -> Data;
 }
 
 pub trait Output {
@@ -45,7 +48,7 @@ impl Machine {
     ///
     /// * `input` - The input data source.
     /// * `output` - The output data sink.
-    pub fn execute<I: Input, O: Output>(&mut self, input: &I, output: &mut O) {
+    pub fn execute<I: Input, O: Output>(&mut self, input: &mut I, output: &mut O) {
         loop {
             if self.step(input, output) {
                 break;
@@ -57,7 +60,7 @@ impl Machine {
     ///
     /// * `input` - The input data source.
     /// * `output` - The output data sink.
-    fn step<I: Input, O: Output>(&mut self, input: &I, output: &mut O) -> bool {
+    fn step<I: Input, O: Output>(&mut self, input: &mut I, output: &mut O) -> bool {
         let mut stop = false;
 
         match self.opcode() {
@@ -165,4 +168,16 @@ impl Machine {
 enum Mode {
     Immediate,
     Position
+}
+
+impl Input for i64 {
+    fn get(&mut self) -> i64 {
+        *self
+    }
+}
+
+impl Output for i64 {
+    fn write(&mut self, val: i64) {
+        *self = val;
+    }
 }
