@@ -1,15 +1,16 @@
-use std::str::FromStr;
 use std::error::Error;
-use std::sync::mpsc::{Sender, Receiver};
 use std::fs::File;
 use std::io::Write;
+use std::str::FromStr;
+use std::sync::mpsc::{Receiver, Sender};
 
 type Data = i64;
 
 #[derive(Clone)]
 pub struct Machine {
-    memory: Vec<Data>,
+    memory: Vec<Option<Data>>,
     ip: usize,
+    base: Data,
 }
 
 pub trait Input {
@@ -22,16 +23,24 @@ pub trait Output {
 
 impl Machine {
     pub fn new(program: &str) -> Result<Machine, Box<dyn Error>> {
-        let memory = program.split(',').map(|s| i64::from_str(s)).collect::<Result<Vec<Data>, _>>()?;
+        let memory = program
+            .split(',')
+            .map(|s| i64::from_str(s))
+            .collect::<Result<Vec<Data>, _>>()?;
 
         Ok(Machine {
-            memory,
-            ip: 0
+            memory: memory.iter().map(|v| Some(*v)).collect(),
+            ip: 0,
+            base: 0,
         })
     }
 
     pub fn set_force(&mut self, addr: usize, val: Data) {
-        self.memory[addr] = val;
+        if self.memory.len() <= addr {
+            self.memory.resize(addr + 1, None);
+        }
+
+        self.memory[addr] = Some(val);
     }
 
     /// Reads a value at a given address.
@@ -41,7 +50,7 @@ impl Machine {
     /// * `addr` - The address to read at.
     pub fn read(&self, addr: usize) -> Data {
         let value = self.memory.get(addr);
-        *value.unwrap_or_else(|| panic!("Address out of range: {}", addr))
+        value.map_or(0, |opt| opt.unwrap_or(0))
     }
 
     /// Runs the machine to completion and returns the output.
@@ -67,45 +76,49 @@ impl Machine {
             1 => {
                 self.write(3, self.param(1) + self.param(2));
                 self.ip += 4;
-            },
+            }
             2 => {
                 self.write(3, self.param(1) * self.param(2));
                 self.ip += 4;
-            },
+            }
             3 => {
                 self.write(1, input.get());
                 self.ip += 2;
-            },
+            }
             4 => {
                 output.write(self.param(1));
                 self.ip += 2;
-            },
+            }
             5 => {
                 if self.param(1) != 0 {
                     self.ip = self.param(2) as usize;
                 } else {
                     self.ip += 3;
                 }
-            },
+            }
             6 => {
                 if self.param(1) == 0 {
                     self.ip = self.param(2) as usize;
                 } else {
                     self.ip += 3;
                 }
-            },
+            }
             7 => {
                 let val = if self.param(1) < self.param(2) { 1 } else { 0 };
                 self.write(3, val);
                 self.ip += 4;
-            },
+            }
             8 => {
                 let val = if self.param(1) == self.param(2) { 1 } else { 0 };
                 self.write(3, val);
                 self.ip += 4;
-            },
+            }
+            9 => {
+                self.base += self.param(1);
+                self.ip += 2;
+            }
             99 => stop = true,
-            _ => panic!("Unknown op code: {}", self.opcode())
+            _ => panic!("Unknown op code: {}", self.opcode()),
         }
 
         stop
@@ -119,7 +132,8 @@ impl Machine {
     fn param(&self, offset: usize) -> Data {
         let address = match self.mode(offset) {
             Mode::Position => self.read(self.ip + offset),
-            Mode::Immediate => (self.ip + offset) as i64
+            Mode::Immediate => (self.ip + offset) as i64,
+            Mode::Relative => self.read(self.ip + offset) + self.base,
         };
 
         self.read(address as usize)
@@ -134,10 +148,15 @@ impl Machine {
     fn write(&mut self, offset: usize, value: Data) {
         let address = match self.mode(offset) {
             Mode::Position => self.read(self.ip + offset),
-            Mode::Immediate => (self.ip + offset) as i64
+            Mode::Immediate => (self.ip + offset) as i64,
+            Mode::Relative => self.read(self.ip + offset) + self.base,
         };
 
-        self.memory[address as usize] = value;
+        if self.memory.len() <= address as usize {
+            self.memory.resize(address as usize + 1, None);
+        }
+
+        self.memory[address as usize] = Some(value);
     }
 
     /// Returns the mode of the parameter specified at a given offset.
@@ -155,7 +174,8 @@ impl Machine {
         match mode {
             0 => Mode::Position,
             1 => Mode::Immediate,
-            _ => panic!("Unknown mode encountered: {}", mode)
+            2 => Mode::Relative,
+            _ => panic!("Unknown mode encountered: {}", mode),
         }
     }
 
@@ -167,7 +187,8 @@ impl Machine {
 
 enum Mode {
     Immediate,
-    Position
+    Position,
+    Relative,
 }
 
 impl Input for i64 {
@@ -185,6 +206,12 @@ impl Output for i64 {
 impl Output for Sender<i64> {
     fn write(&mut self, val: i64) {
         self.send(val);
+    }
+}
+
+impl Output for Vec<i64> {
+    fn write(&mut self, val: i64) {
+        self.push(val);
     }
 }
 
